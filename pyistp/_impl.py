@@ -28,6 +28,55 @@ ISTP_NOT_COMPLIANT_W = "Non compliant ISTP file"
 
 log = logging.getLogger(__name__)
 
+# AMDA/DDBASE stores its time axis in two formats no ISTP attribute describes:
+# DDTime character records, and plain seconds since the Unix epoch. The data
+# files carry no usable units of their own -- several carry a wrong one
+# inherited from a CDF conversion -- so the master file is what decides here.
+DDTIME_UNITS = "DDTIME"
+UNIX_SECONDS_RE = re.compile(r"^seconds\s+since\s+1970-01-01", re.IGNORECASE)
+
+
+def _ddtime_to_datetime64(chars):
+    """YYYYDDDHHMMSSMMM character records -> datetime64[ns]. DDD is 0-based."""
+
+    def field(start, stop):
+        column = np.ascontiguousarray(chars[:, start:stop])
+        return column.view(f"S{stop - start}").ravel().astype(np.int64)
+
+    year, doy = field(0, 4), field(4, 7)
+    hour, minute = field(7, 9), field(9, 11)
+    second, milli = field(11, 13), field(13, 16)
+    days = (year - 1970).astype("datetime64[Y]").astype("datetime64[D]")
+    days = days + doy.astype("timedelta64[D]")
+    ms = ((hour * 60 + minute) * 60 + second) * 1000 + milli
+    return (days.astype("datetime64[ms]")
+            + ms.astype("timedelta64[ms]")).astype("datetime64[ns]")
+
+
+def _decode_epoch(axis):
+    """Decode a time axis whose storage format only the master file declares.
+
+    Values are left untouched unless the declared units ask for a conversion,
+    so this cannot disturb a file that already carries a real CDF epoch.
+    """
+    units = str(axis.attributes.get("UNITS", "")).strip()
+    values = np.asarray(axis.values)
+    if units.upper() == DDTIME_UNITS:
+        if values.dtype.kind in ("S", "U") and values.ndim == 2 and values.shape[1] >= 16:
+            axis.values = _ddtime_to_datetime64(values)
+            axis.cdf_type = "CDF_TIME_TT2000"
+        elif values.size:
+            log.warning(
+                f"{ISTP_NOT_COMPLIANT_W}: {axis.name} declares {DDTIME_UNITS} but holds "
+                f"{values.dtype} of shape {values.shape}, leaving it as is")
+    elif UNIX_SECONDS_RE.match(units) and values.dtype.kind in ("f", "i", "u"):
+        # Scaled through microseconds: float64 cannot hold nanoseconds since
+        # 1970 without losing the last couple of hundred of them.
+        micro = np.round(np.asarray(values, dtype="f8") * 1e6).astype("int64")
+        axis.values = micro.astype("datetime64[us]").astype("datetime64[ns]")
+        axis.cdf_type = "CDF_TIME_TT2000"
+    return axis
+
 
 def _get_attributes(master_cdf: Driver, cdf: Driver, var: str):
     attrs = {}
@@ -75,6 +124,8 @@ def _get_axes(master_cdf: Driver, cdf: Driver, var: str, data_shape):
     unix_time_name = master_cdf.variable_attribute_value(var, "DEPEND_TIME")
     axes = list(
         map(lambda attr: _get_axis(master_cdf, cdf, master_cdf.variable_attribute_value(var, attr), var), attrs))
+    if attrs and attrs[0].upper() == "DEPEND_0" and axes[0] is not None:
+        _decode_epoch(axes[0])
     if unix_time_name is not None and unix_time_name in master_cdf.variables():
         unix_time = _get_axis(master_cdf, cdf, unix_time_name, var)
         if len(unix_time) == data_shape[0] and len(axes[0].values) != data_shape[0]:
