@@ -7,7 +7,11 @@ def _driver_factory(file_or_buffer):
     else:
         with open(file_or_buffer, "rb") as f:
             magic = f.read(4)
-    if magic in (b'\x89HDF', b'CDF'):
+    # netCDF3 files start with "CDF" followed by a version byte, so comparing
+    # the four bytes read against b'CDF' never matched and they fell through to
+    # the CDF driver, which opens them and then returns None for every variable.
+    if magic == b'\x89HDF' or (magic[:3] == b'CDF'
+                               and magic[3:4] in (b'\x01', b'\x02', b'\x05')):
         from .drivers.netcdf import Driver as NetCDFDriver
         return NetCDFDriver(file_or_buffer)
     return current_driver(file_or_buffer)
