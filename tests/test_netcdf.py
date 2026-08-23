@@ -398,3 +398,15 @@ class TestLoadNetCDF:
         assert var is not None
         assert var.axes[0].values.dtype == np.dtype("datetime64[ns]")
         assert var.axes[0].values.dtype == np.dtype("datetime64[ns]")
+
+    def test_support_data_variable_with_no_depend_n(self, nc_path):
+        # https://github.com/SciQLop/speasy/issues/335
+        loader = pyistp.load(file=str(nc_path))
+        assert loader.data_variable("Epoch") is None
+        epoch = loader.support_data_variable("Epoch")
+        assert epoch is not None
+        assert epoch.values.dtype == np.dtype("datetime64[ns]")
+
+    def test_support_data_variable_missing_returns_none(self, nc_path):
+        loader = pyistp.load(file=str(nc_path))
+        assert loader.support_data_variable("DOES_NOT_EXIST") is None

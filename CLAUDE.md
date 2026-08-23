@@ -33,7 +33,13 @@ files); add a new resource file and a row to `test_data` to cover a new case.
 
 The public API is tiny: `pyistp.load(file=, buffer=, master_file=, master_buffer=)`
 returns an `ISTPLoader` exposing `attributes()`, `attribute(key)`,
-`data_variables()` (list of names), and `data_variable(name)` (a `DataVariable`).
+`data_variables()` (list of names), `data_variable(name)` (a `DataVariable`),
+and `support_data_variable(name)` (a `SupportDataVariable`, or `None` if
+`name` isn't in the file/master). The latter reuses `_get_axis` directly —
+same master/skeleton fallback and Cluster-CSA `sig_digits` handling as a
+`DEPEND_n` axis lookup — so it works for any named variable regardless of
+`VAR_TYPE`, including ones with no `DEPEND_n` of their own (e.g. `Epoch`
+itself), unlike `data_variable()` which requires at least one axis.
 
 Three layers:
 

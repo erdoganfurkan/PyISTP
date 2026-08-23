@@ -1,5 +1,6 @@
-from typing import List
+from typing import List, Optional
 from .data_variable import DataVariable
+from .support_data_variable import SupportDataVariable
 
 
 class ISTPLoader:
@@ -19,3 +20,6 @@ class ISTPLoader:
 
     def data_variable(self, var_name) -> DataVariable:
         return self._impl.data_variable(var_name)
+
+    def support_data_variable(self, var_name) -> Optional[SupportDataVariable]:
+        return self._impl.support_data_variable(var_name)

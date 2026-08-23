@@ -140,3 +140,6 @@ class ISTPLoaderImpl:
 
     def data_variable(self, var_name) -> DataVariable:
         return _load_data_var(self.master_cdf, self.cdf, var_name)
+
+    def support_data_variable(self, var_name) -> Optional[SupportDataVariable]:
+        return _get_axis(self.master_cdf, self.cdf, var_name, var_name)

@@ -129,3 +129,26 @@ class TestPyIstp(unittest.TestCase):
                                 master_file=f"{current_path}/resources/sta_l1_het_00000000_v01.cdf")
         self.assertIsNotNone(istp_file)
         self.assertIsNotNone(istp_file.data_variable('Proton_Flux'))
+
+    def test_support_data_variable_with_no_depend_n(self):
+        # https://github.com/SciQLop/speasy/issues/335
+        # Epoch has no DEPEND_n of its own, so data_variable() can't load it,
+        # but it's still a legitimate support_data variable callers may need.
+        istp_file = pyistp.load(file=f"{current_path}/resources/solo_l3_rpw-bia-density-10-seconds_00000000_v01.cdf")
+        self.assertIsNone(istp_file.data_variable('Epoch'))
+        epoch = istp_file.support_data_variable('Epoch')
+        self.assertIsNotNone(epoch)
+        self.assertEqual(epoch.cdf_type, 'CDF_TIME_TT2000')
+        self.assertEqual(len(epoch), len(istp_file.data_variable('DENSITY').values))
+
+    def test_support_data_variable_quality_flag(self):
+        # https://github.com/SciQLop/speasy/issues/335
+        istp_file = pyistp.load(file=f"{current_path}/resources/solo_l3_rpw-bia-density-10-seconds_00000000_v01.cdf")
+        quality = istp_file.support_data_variable('QUALITY_FLAG')
+        self.assertIsNotNone(quality)
+        self.assertEqual(quality.attributes['VAR_TYPE'], 'support_data')
+        self.assertEqual(len(quality), len(istp_file.data_variable('DENSITY').values))
+
+    def test_support_data_variable_missing_returns_none(self):
+        istp_file = pyistp.load(file=f"{current_path}/resources/solo_l3_rpw-bia-density-10-seconds_00000000_v01.cdf")
+        self.assertIsNone(istp_file.support_data_variable('DOES_NOT_EXIST'))
